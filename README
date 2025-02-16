@@ -1,0 +1,17 @@
+# ansible-playbook playbook/1_image.yml --ask-become-pass
+
+# group_vars/all/vault.yml
+## Proxmox host details
+PROXMOX_NODE: ""
+PROXMOX_HOST: ""
+PROXMOX_SSH_PORT: ""
+PROXMOX_USER: ""
+PROXMOX_PASSWORD: ""
+PROXMOX_API_KEY: ""
+PROXMOX_SSH_KEY: "~/.ssh/id_rsa"
+
+## Cloud-init details   
+CLOUD_INIT_USER: user
+CLOUD_INIT_PASSWORD: "12345678"
+SSH_PUBLIC_KEYS: |
+  ssh-rsa AAAA...

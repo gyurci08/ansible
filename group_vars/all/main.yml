@@ -1,0 +1,25 @@
+STORAGE_POOL: "local-lvm"
+
+# Region
+TIMEZONE: "Europe/Budapest"
+
+# Image details
+DISTRIBUTION: "ubuntu"
+VERSION_CODENAME: "noble"
+IMAGE_URL: "https://cloud-images.ubuntu.com/{{ VERSION_CODENAME }}/current/{{ VERSION_CODENAME }}-server-cloudimg-amd64.img"
+DESTINATION_PATH: "/var/lib/vz/template/iso/ubuntu-{{ VERSION_CODENAME }}-cloudimg.img"
+
+# Template VM details
+VM_VMID: "9000"
+VM_NAME: "template-ubuntu-{{ VERSION_CODENAME }}"
+VM_MACHINE: q35
+VM_CPU: host
+VM_CORES: 2
+VM_MEMORY: 2048
+VM_ROOT_SIZE: "10G"
+VM_BRIDGE: "vmbr3"
+
+# Pre-install packages
+PACKAGES:
+  - qemu-guest-agent
+  - open-iscsi

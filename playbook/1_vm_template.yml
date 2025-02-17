@@ -195,6 +195,7 @@
                 --ciupgrade 0
                 --ipconfig0 'ip=dhcp'
                 --ipconfig1 ''
+                --searchdomain "local"
 
             - name: Remove temporary SSH key file
               ansible.builtin.file:

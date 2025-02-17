@@ -1,4 +1,4 @@
-# ansible-playbook playbook/1_image.yml --ask-become-pass
+# ansible-playbook playbook/1_vm_template.yml --ask-vault-pass
 
 # group_vars/all/vault.yml
 ## Proxmox host details

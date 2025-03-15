@@ -121,7 +121,7 @@
 
         - name: Copy custom cloud-init configuration
           ansible.builtin.copy:
-            src: "../cloud.cfg"
+            src: "{{ playbook_dir }}/../cloud-{{ DISTRIBUTION }}.cfg"
             dest: "/tmp/{{ VM_VMID }}-cloud.cfg"
             mode: '0644'
 

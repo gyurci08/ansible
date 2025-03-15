@@ -1,26 +1,23 @@
+# Proxmox installation specific
 STORAGE_POOL: "local-lvm"
 
-# Region
+# Region & Timezone
 TIMEZONE: "Europe/Budapest"
 
-# Image details
-DISTRIBUTION: "ubuntu"
-VERSION_CODENAME: "noble"
-IMAGE_URL: "https://cloud-images.ubuntu.com/{{ VERSION_CODENAME }}/current/{{ VERSION_CODENAME }}-server-cloudimg-amd64.img"
-DESTINATION_PATH: "/var/lib/vz/template/iso/ubuntu-{{ VERSION_CODENAME }}-cloudimg.img"
+# Target distro: suse, ubuntu
+DISTRIBUTION: "suse"
 
 # Template VM details
-VM_VMID: "9000"
-VM_NAME: "template-ubuntu-{{ VERSION_CODENAME }}"
+VM_VMID: "9001"
+VM_NAME: "template-{{ DISTRIBUTION }}-{{ VERSION }}"
 VM_MACHINE: q35
 VM_CPU: host
 VM_CORES: 2
 VM_DISPLAY: vmware
-VM_MEMORY: 2048
+VM_MEMORY: 1024
 VM_ROOT_SIZE: "10G"
-VM_BRIDGE: "vmbr3"
+VM_BRIDGE: "vmbr0"
 
 # Pre-install packages
 PACKAGES:
   - qemu-guest-agent
-  - open-iscsi

@@ -5,10 +5,10 @@ STORAGE_POOL: "local-lvm"
 TIMEZONE: "Europe/Budapest"
 
 # Target distro: suse, ubuntu
-DISTRIBUTION: "suse"
+DISTRIBUTION: "ubuntu"
 
 # Template VM details
-VM_VMID: "9001"
+VM_VMID: "9000"
 VM_NAME: "template-{{ DISTRIBUTION }}-{{ VERSION }}"
 VM_MACHINE: q35
 VM_CPU: host

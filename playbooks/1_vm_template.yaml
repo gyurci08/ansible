@@ -187,7 +187,7 @@
             vga: "{{ VM_DISPLAY }}"
             ostype: "l26"
             net:
-              net0: "virtio,bridge={{ VM_BRIDGE }}"
+              net0: "virtio,bridge={{ VM_BRIDGE }},firewall=1"
             scsihw: "virtio-scsi-pci"
             ide:
               ide0: "{{ STORAGE_POOL }}:cloudinit"

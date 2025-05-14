@@ -2,7 +2,7 @@
 PROXMOX_NODE: "example"
 PROXMOX_HOST: "192.168.0.100"
 PROXMOX_SSH_PORT: "22"
-PROXMOX_USER: "ansible"
+PROXMOX_USER: "robot"
 PROXMOX_PASSWORD: "..."
 PROXMOX_API_KEY: "..."
 PROXMOX_SSH_KEY: "~/.ssh/proxmox_ecdsa"

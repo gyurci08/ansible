@@ -1,1 +1,0 @@
-# ansible-playbook playbooks/1_vm_template.yaml --ask-vault-pass

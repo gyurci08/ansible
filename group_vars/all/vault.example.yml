@@ -1,0 +1,14 @@
+# Proxmox host details
+PROXMOX_NODE: "example"
+PROXMOX_HOST: "192.168.0.100"
+PROXMOX_SSH_PORT: "22"
+PROXMOX_USER: "ansible"
+PROXMOX_PASSWORD: "..."
+PROXMOX_API_KEY: "..."
+PROXMOX_SSH_KEY: "~/.ssh/proxmox_ecdsa"
+
+# Cloud-init details   
+CLOUD_INIT_USER: admin
+CLOUD_INIT_PASSWORD: "..."
+SSH_PUBLIC_KEYS: |
+  ssh-rsa AAAA...

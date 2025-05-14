@@ -23,4 +23,6 @@ PACKAGES:
   - qemu-guest-agent
   - sudo
   - traceroute
+  - htop
+  - iotop
   - nano

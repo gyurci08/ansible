@@ -1,4 +1,4 @@
-# ansible-playbook playbooks/1_vm_template.yaml --ask-vault-pass
+# How-To
 
 1. Create a robot user:
 
@@ -27,4 +27,17 @@ SDN.Audit
 "
 useradd -m -s /bin/bash -G sudo ${VAR_USER} && pveum user add ${VAR_USER}@pam && passwd ${VAR_USER}
 pveum aclmod / -user ${VAR_USER}@pam -role ${VAR_ROLE}
+```
+
+2. Create vault.yml:
+
+
+3. Start:
+
+```
+ansible-playbook playbooks/1_rtr_template.yml --ask-vault-pass
+```
+
+```
+ansible-playbook playbooks/2_vm_template.yml --ask-vault-pass
 ```

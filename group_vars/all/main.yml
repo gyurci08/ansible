@@ -17,6 +17,7 @@ OPENWRT:
   VM_BRIDGE: "vmbr0"
   PACKAGES:
     - nano
+    - tcpdump
 
 GUEST_DISTRIBUTION: "suse" # Target distro: suse, ubuntu
 GUEST:

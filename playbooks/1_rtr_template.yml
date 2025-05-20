@@ -7,17 +7,17 @@
   tasks:
     - name: Check if distribution variable file exists
       stat:
-        path: "{{ playbook_dir }}/../vars/distro-{{ DISTRIBUTION }}.yaml"
+        path: "{{ playbook_dir }}/../vars/distro-openwrt.yml"
       register: DISTRO_FILE
 
     - name: Fail if distribution variable file does not exist
       fail:
-        msg: "Distribution variable file '{{ playbook_dir }}/../vars/distro-{{ DISTRIBUTION }}.yaml' not found."
+        msg: "Distribution variable file '{{ playbook_dir }}/../vars/distro-openwrt.yml' not found."
       when: not DISTRO_FILE.stat.exists
 
     - name: Load distribution-specific variables dynamically based on DISTRIBUTION variable
       ansible.builtin.include_vars:
-        file: "{{ playbook_dir }}/../vars/distro-{{ DISTRIBUTION }}.yaml"
+        file: "{{ playbook_dir }}/../vars/distro-openwrt.yml"
 
     - name: Set global facts for all hosts
       ansible.builtin.set_fact:
@@ -30,7 +30,6 @@
       delegate_facts: true
       loop: "{{ groups['all'] }}"
 
-      
 ### Proxmox validation
 - name: Check if host is running Proxmox
   hosts: all
@@ -52,110 +51,85 @@
         success_msg: "Proxmox VE detected: {{ PVE_VERSION.stdout }}"
 
 ### Playbook start
-- name: Prepare environment on proxmox
+- name: Prepare and deploy OpenWRT router template on Proxmox
   hosts: all
   become: yes
   gather_facts: false
+  vars_files:
+    - ../vars/vars.yml
+
   tasks:
-    - name: Prepare environment
-      block:
-        - name: Ensure destination directory exists
-          ansible.builtin.file:
-            path: "/var/lib/vz/template/iso"
-            state: directory
-            mode: '0755'
+    - name: Ensure destination directory exists
+      ansible.builtin.file:
+        path: "/var/lib/vz/template/iso"
+        state: directory
+        mode: '0755'
 
-        - name: Install libguestfs-tools
-          ansible.builtin.apt:
-            name: libguestfs-tools
-            state: present
-            update_cache: yes
-          register: APT_RESULT
-          until: APT_RESULT is success
-          retries: 3
-          delay: 5
+    - name: Ensure libguestfs-tools is installed
+      ansible.builtin.apt:
+        name: libguestfs-tools
+        state: present
+        update_cache: yes
 
-    - name: Prepare cloud image
-      block:
-        - name: Check if cloud image exists
-          ansible.builtin.stat:
-            path: "{{ DESTINATION_PATH }}"
-          register: IMAGE_STAT
+    - name: Check if extracted OpenWRT image exists
+      ansible.builtin.stat:
+        path: "{{ DESTINATION_PATH }}"
+      register: openwrt_img_extracted
 
-        - name: Download and verify cloud image
-          ansible.builtin.get_url:
-            url: "{{ IMAGE_URL }}"
-            dest: "{{ DESTINATION_PATH }}"
-            mode: '0644'
-          when: >
-            not IMAGE_STAT.stat.exists
-          register: DOWNLOAD_RESULT
+    - name: Show image URL before downloading
+      ansible.builtin.debug:
+        msg: "Downloading OpenWRT image from: {{ IMAGE_URL }}"
+      when: not openwrt_img_extracted.stat.exists
 
-        - name: Create a copy of the image
-          ansible.builtin.copy:
-            src: "{{ DESTINATION_PATH }}"
-            dest: "{{ DESTINATION_PATH }}.modified"
-            remote_src: yes
+    - name: Download OpenWRT image if extracted image does not exist
+      ansible.builtin.get_url:
+        url: "{{ IMAGE_URL }}"
+        dest: "{{ DESTINATION_PATH }}.gz"
+        mode: '0644'
+      when: not openwrt_img_extracted.stat.exists
+      register: download_result
 
-        - name: Resize copied cloud image if needed
-          ansible.builtin.shell: |
-            current_size=$(qemu-img info {{ DESTINATION_PATH }}.modified | grep 'virtual size' | awk '{print $3}')
-            if [ "$current_size" != "{{ VM_ROOT_SIZE }}" ]; then
-              qemu-img resize -f qcow2 {{ DESTINATION_PATH }}.modified {{ VM_ROOT_SIZE }}
-            fi
-          register: RESIZE_RESULT
-          changed_when: RESIZE_RESULT.stdout != ""
+    - name: Extract OpenWRT image if compressed and not already extracted
+      ansible.builtin.command:
+        cmd: "gzip -d {{ DESTINATION_PATH }}.gz"
+      args:
+        removes: "{{ DESTINATION_PATH }}.gz"
+        creates: "{{ DESTINATION_PATH }}"
+      register: gzip_result
+      failed_when: >
+        gzip_result.rc != 0 and
+        ('trailing garbage ignored' not in gzip_result.stderr)
 
-        - name: Install packages in the copied cloud image
-          ansible.builtin.command:
-            cmd: >
-              virt-customize -a {{ DESTINATION_PATH }}.modified
-              --install {{ PACKAGES | join(",") }}
-              --run-command '{{ PACKAGE_UPDATE_COMMAND }} && {{ PACKAGE_UPGRADE_COMMAND }}'
+    - name: Create a copy of the image
+      ansible.builtin.copy:
+        src: "{{ DESTINATION_PATH }}"
+        dest: "{{ DESTINATION_PATH }}.modified"
+        remote_src: yes
 
-        - name: Set timezone to {{ TIMEZONE }}
-          ansible.builtin.command:
-            cmd: virt-customize -a {{ DESTINATION_PATH }}.modified --timezone "{{ TIMEZONE }}"
-          register: TIMEZONE_RESULT
-          changed_when: TIMEZONE_RESULT.rc == 0
+    - name: Resize copied OpenWRT image if needed
+      ansible.builtin.shell: |
+        current_size=$(qemu-img info {{ DESTINATION_PATH }}.modified | grep 'virtual size' | awk '{print $3}')
+        if [ "$current_size" != "{{ OPENWRT.VM_ROOT_SIZE }}" ]; then
+          qemu-img resize -f raw {{ DESTINATION_PATH }}.modified {{ OPENWRT.VM_ROOT_SIZE }}
+        fi
+      register: RESIZE_RESULT
+      changed_when: RESIZE_RESULT.stdout != ""
 
-        - name: Copy custom cloud-init configuration
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../cloud-init/cloud-{{ DISTRIBUTION }}.cfg"
-            dest: "/tmp/{{ VM_VMID }}-cloud.cfg"
-            mode: '0644'
-
-        - name: Replace original cloud.cfg in VM
-          ansible.builtin.command:
-            cmd: >
-              virt-customize -a {{ DESTINATION_PATH }}.modified 
-              --upload "/tmp/{{ VM_VMID }}-cloud.cfg:/etc/cloud/cloud.cfg"
-
-        - name: Disable MOTD messages in image
-          ansible.builtin.command:
-            cmd: >
-              virt-customize -v -a {{ DESTINATION_PATH }}.modified 
-              --run-command 'chmod -x /etc/update-motd.d/*'
-              --run-command 'chmod +x /etc/update-motd.d/50-landscape-sysinfo'
-              --run-command 'echo "ENABLED=0" > /etc/default/motd-news'
-          ignore_errors: yes
-          when: DISTRIBUTION == 'ubuntu'
-
-    - name: Check existing vm
+    - name: Check existing OpenWRT VM
       community.general.proxmox_vm_info:
         api_user: "{{ PROXMOX_USER }}@pam"
         api_password: "{{ PROXMOX_PASSWORD }}"
         api_host: "{{ PROXMOX_HOST }}"
         node: "{{ PROXMOX_NODE }}"
-        vmid: "{{ VM_VMID }}"
+        vmid: "{{ OPENWRT.VM_VMID }}"
       register: VM_INFO
 
-    - name: Stop and remove existing VM if it exists
+    - name: Stop and remove existing OpenWRT VM if it exists
       when: VM_INFO.proxmox_vms | length > 0
       block:
         - name: Stop existing VM if running
           ansible.builtin.command:
-            cmd: "qm stop {{ VM_VMID }}"
+            cmd: "qm stop {{ OPENWRT.VM_VMID }}"
           register: STOP_RESULT
           changed_when: STOP_RESULT.rc == 0
           when: VM_INFO.proxmox_vms[0].status == 'running'
@@ -163,13 +137,13 @@
 
         - name: Remove existing VM
           ansible.builtin.command:
-            cmd: "qm destroy {{ VM_VMID }} --purge"
+            cmd: "qm destroy {{ OPENWRT.VM_VMID }} --purge"
           register: DESTROY_RESULT
           until: DESTROY_RESULT.rc == 0
           retries: 3
           delay: 5
 
-    - name: Create and configure new VM
+    - name: Create and configure new OpenWRT router VM
       block:
         - name: Create new VM in Proxmox
           community.general.proxmox_kvm:
@@ -177,63 +151,38 @@
             api_password: "{{ PROXMOX_PASSWORD }}"
             api_host: "{{ PROXMOX_HOST }}"
             node: "{{ PROXMOX_NODE }}"
-            vmid: "{{ VM_VMID }}"
-            name: "{{ VM_NAME }}"
-            machine: "{{ VM_MACHINE }}"
-            memory: "{{ VM_MEMORY }}"
-            cpu: "{{ VM_CPU }}"
-            cores: "{{ VM_CORES }}"
+            vmid: "{{ OPENWRT.VM_VMID }}"
+            name: "{{ OPENWRT.VM_NAME }}"
+            machine: "{{ OPENWRT.VM_MACHINE }}"
+            memory: "{{ OPENWRT.VM_MEMORY }}"
+            cpu: "{{ OPENWRT.VM_CPU }}"
+            cores: "{{ OPENWRT.VM_CORES }}"
             sockets: 1
-            vga: "{{ VM_DISPLAY }}"
+            vga: "{{ OPENWRT.VM_DISPLAY }}"
             ostype: "l26"
             net:
-              net0: "virtio,bridge={{ VM_BRIDGE }},firewall=1"
+              net0: "virtio,bridge={{ OPENWRT.VM_BRIDGE }}"
+              net1: "virtio,bridge={{ OPENWRT.VM_BRIDGE }}"
             scsihw: "virtio-scsi-pci"
-            ide:
-              ide0: "{{ STORAGE_POOL }}:cloudinit"
-            agent: 1
+            agent: 0
             serial:
               serial0: socket
             state: present
 
         - name: Import and configure disk
           ansible.builtin.shell: >
-            qm importdisk {{ VM_VMID }} {{ DESTINATION_PATH }}.modified {{ STORAGE_POOL }} &&
-            qm set {{ VM_VMID }}
-            --virtio0 {{ STORAGE_POOL }}:vm-{{ VM_VMID }}-disk-0,discard=on,iothread=1
+            qm importdisk {{ OPENWRT.VM_VMID }} {{ DESTINATION_PATH }}.modified {{ STORAGE_POOL }} &&
+            qm set {{ OPENWRT.VM_VMID }}
+            --virtio0 {{ STORAGE_POOL }}:vm-{{ OPENWRT.VM_VMID }}-disk-0,discard=on,iothread=1
             --boot c --bootdisk virtio0 
           args:
-            creates: "/var/lib/vz/images/{{ VM_VMID }}/vm-{{ VM_VMID }}-disk-0.raw"
-
-        - name: Configure cloud-init
-          block:
-            - name: Create temporary SSH key file
-              ansible.builtin.copy:
-                content: "{{ SSH_PUBLIC_KEYS }}"
-                dest: "/tmp/ssh_key_{{ VM_VMID }}.pub"
-                mode: '0600'
-            
-            - name: Set cloud-init configurations
-              ansible.builtin.shell: >
-                qm set {{ VM_VMID }}
-                --ciuser {{ CLOUD_INIT_USER }}
-                --cipassword {{ CLOUD_INIT_PASSWORD }}
-                --sshkeys "/tmp/ssh_key_{{ VM_VMID }}.pub"
-                --ciupgrade 0
-                --ipconfig0 'ip=dhcp'
-                --ipconfig1 ''
-                --searchdomain "local"
-
-            - name: Remove temporary SSH key file
-              ansible.builtin.file:
-                path: "/tmp/ssh_key_{{ VM_VMID }}.pub"
-                state: absent
+            creates: "/var/lib/vz/images/{{ OPENWRT.VM_VMID }}/vm-{{ OPENWRT.VM_VMID }}-disk-0.raw"
 
     - name: Finalize
       block:
         - name: Convert VM to template
           ansible.builtin.command:
-            cmd: qm template {{ VM_VMID }}
+            cmd: qm template {{ OPENWRT.VM_VMID }}
 
         - name: Verify template creation
           community.general.proxmox_vm_info:
@@ -241,7 +190,7 @@
             api_password: "{{ PROXMOX_PASSWORD }}"
             api_host: "{{ PROXMOX_HOST }}"
             node: "{{ PROXMOX_NODE }}"
-            vmid: "{{ VM_VMID }}"
+            vmid: "{{ OPENWRT.VM_VMID }}"
           register: FINAL_VM_INFO
 
         - name: Cleanup modified image file
@@ -253,6 +202,6 @@
         - name: Display results
           ansible.builtin.debug:
             msg:
-              - "Download Result = {{ DOWNLOAD_RESULT }}"
+              - "Download Result = {{ download_result }}"
               - "Resize Result = {{ RESIZE_RESULT }}"
               - "VM Info = {{ FINAL_VM_INFO }}"

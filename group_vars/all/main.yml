@@ -10,7 +10,7 @@ OPENWRT:
   VM_NAME: "template-openwrt-{{ VERSION }}"
   VM_MACHINE: q35
   VM_CPU: host
-  VM_CORES: 2
+  VM_CORES: 1
   VM_DISPLAY: serial0
   VM_MEMORY: 256
   VM_ROOT_SIZE: "2G"
